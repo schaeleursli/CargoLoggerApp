@@ -1,0 +1,12 @@
+node_modules
+*.log
+ios/build
+android/app/build
+.env
+.DS_Store
+*.p12
+*.key
+*.mobileprovision
+coverage/
+tmp/
+temp/
