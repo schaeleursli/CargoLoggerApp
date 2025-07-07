@@ -1,7 +1,15 @@
 import React, { useState } from 'react';
 import {
-  SafeAreaView, ScrollView, View, Button, TextInput, Text, Image,
-  PermissionsAndroid, Platform
+  SafeAreaView,
+  ScrollView,
+  View,
+  TextInput,
+  Text,
+  Image,
+  Platform,
+  PermissionsAndroid,
+  TouchableOpacity,
+  StyleSheet,
 } from 'react-native';
 import { launchCamera, launchImageLibrary, Asset } from 'react-native-image-picker';
 import Geolocation from 'react-native-geolocation-service';
@@ -23,7 +31,14 @@ interface GPSLocation {
 }
 
 export default function App() {
-  const [cargo, setCargo] = useState<CargoData>({ id:'', desc:'', length:'', width:'', height:'', weight:'' });
+  const [cargo, setCargo] = useState<CargoData>({
+    id: '',
+    desc: '',
+    length: '',
+    width: '',
+    height: '',
+    weight: '',
+  });
   const [gps, setGps] = useState<GPSLocation>({ lat: null, lon: null });
   const [base64Image, setBase64Image] = useState<string>('');
   const [imageUri, setImageUri] = useState<string>('');
@@ -42,9 +57,10 @@ export default function App() {
   };
 
   const pickOrCapture = async (mode: 'camera' | 'gallery') => {
-    const res = mode === 'camera'
-      ? await launchCamera({ mediaType: 'photo', includeBase64: true })
-      : await launchImageLibrary({ mediaType: 'photo', includeBase64: true });
+    const res =
+      mode === 'camera'
+        ? await launchCamera({ mediaType: 'photo', includeBase64: true })
+        : await launchImageLibrary({ mediaType: 'photo', includeBase64: true });
 
     const asset: Asset | undefined = res.assets?.[0];
     if (asset?.uri && asset.base64) {
@@ -54,7 +70,7 @@ export default function App() {
   };
 
   const embedMetadata = () => {
-    if (!base64Image) return alert('Take or select a photo first');
+    if (!base64Image) return alert('Please select or capture an image first.');
     const dataToEmbed = { ...cargo, gps };
     const html = `
       <html><body>
@@ -82,43 +98,152 @@ export default function App() {
 
   const onMessage = async (e: any) => {
     const data = e.nativeEvent.data.replace(/^data:image\/jpeg;base64,/, '');
-    const path = RNFS.ExternalDirectoryPath + `/cargo_${Date.now()}.jpg`;
+    const path = `${RNFS.ExternalDirectoryPath}/cargo_${Date.now()}.jpg`;
     await RNFS.writeFile(path, data, 'base64');
-    alert('Saved image to: ' + path);
+    alert('Image saved with embedded metadata at:\n' + path);
     setEmbedHtml('');
   };
 
+  const CustomButton = ({ title, onPress }: { title: string; onPress: () => void }) => (
+    <TouchableOpacity style={styles.button} onPress={onPress}>
+      <Text style={styles.buttonText}>{title}</Text>
+    </TouchableOpacity>
+  );
+
   return (
-    <SafeAreaView style={{flex:1, padding:10}}>
-      <ScrollView>
-        <View style={{flexDirection:'row', justifyContent:'space-around', marginBottom:10}}>
-          <Button title="Camera" onPress={() => pickOrCapture('camera')} />
-          <Button title="Gallery" onPress={() => pickOrCapture('gallery')} />
-          <Button title="Get GPS" onPress={requestLocation} />
+    <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.imageContainer}>
+          <CustomButton title="📷 Camera" onPress={() => pickOrCapture('camera')} />
+          <CustomButton title="🖼️ Library" onPress={() => pickOrCapture('gallery')} />
         </View>
 
-        {imageUri ? <Image source={{uri: imageUri}} style={{height:200, marginBottom:10}} /> : null}
+        {imageUri ? <Image source={{ uri: imageUri }} style={styles.imagePreview} /> : null}
 
-        {(['id','desc','length','width','height','weight'] as (keyof CargoData)[]).map(field => (
+        <TextInput
+          style={styles.input}
+          placeholder="Enter Cargo ID"
+          placeholderTextColor="#888"
+          value={cargo.id}
+          onChangeText={text => setCargo({ ...cargo, id: text })}
+        />
+
+        <TextInput
+          style={styles.input}
+          placeholder="Weight (kg)"
+          placeholderTextColor="#888"
+          keyboardType="numeric"
+          value={cargo.weight}
+          onChangeText={text => setCargo({ ...cargo, weight: text })}
+        />
+
+        <TextInput
+          style={[styles.input, styles.textArea]}
+          placeholder="Describe cargo contents"
+          placeholderTextColor="#888"
+          multiline
+          numberOfLines={4}
+          value={cargo.desc}
+          onChangeText={text => setCargo({ ...cargo, desc: text })}
+        />
+
+        <View style={styles.row}>
           <TextInput
-            key={field}
-            placeholder={field.toUpperCase()}
-            value={cargo[field]}
-            onChangeText={t => setCargo({...cargo, [field]: t})}
-            style={{borderWidth:1,padding:8,marginVertical:4}}
+            style={[styles.input, styles.dimInput]}
+            placeholder="L"
+            placeholderTextColor="#888"
+            value={cargo.length}
+            onChangeText={text => setCargo({ ...cargo, length: text })}
           />
-        ))}
+          <TextInput
+            style={[styles.input, styles.dimInput]}
+            placeholder="W"
+            placeholderTextColor="#888"
+            value={cargo.width}
+            onChangeText={text => setCargo({ ...cargo, width: text })}
+          />
+          <TextInput
+            style={[styles.input, styles.dimInput]}
+            placeholder="H"
+            placeholderTextColor="#888"
+            value={cargo.height}
+            onChangeText={text => setCargo({ ...cargo, height: text })}
+          />
+        </View>
 
-        <Text style={{marginVertical:5}}>
-          GPS: {gps.lat?.toFixed(6)}, {gps.lon?.toFixed(6)}
-        </Text>
+        <CustomButton
+          title={gps.lat ? `📍 ${gps.lat.toFixed(5)}, ${gps.lon?.toFixed(5)}` : '📍 Get Location'}
+          onPress={requestLocation}
+        />
 
-        <Button title="Embed & Save" onPress={embedMetadata} />
+        <CustomButton title="💾 Save Cargo Data" onPress={embedMetadata} />
+
+        <Text style={styles.footer}>Powered by Swiss Digital Solutions</Text>
 
         {embedHtml ? (
-          <WebView source={{html: embedHtml}} onMessage={onMessage} style={{height:0,width:0}} />
+          <WebView source={{ html: embedHtml }} onMessage={onMessage} style={{ height: 0, width: 0 }} />
         ) : null}
       </ScrollView>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#121212',
+  },
+  content: {
+    padding: 16,
+  },
+  imageContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 12,
+  },
+  imagePreview: {
+    height: 200,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  input: {
+    backgroundColor: '#1C1C1E',
+    color: '#fff',
+    borderRadius: 10,
+    padding: 12,
+    marginVertical: 6,
+    fontSize: 16,
+  },
+  textArea: {
+    height: 100,
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  dimInput: {
+    flex: 1,
+    marginHorizontal: 4,
+  },
+  button: {
+    backgroundColor: '#0A84FF',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginVertical: 6,
+    flex: 1,
+    marginHorizontal: 4,
+  },
+  buttonText: {
+    color: '#fff',
+    textAlign: 'center',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  footer: {
+    color: '#888',
+    textAlign: 'center',
+    marginTop: 20,
+    fontSize: 13,
+  },
+});
